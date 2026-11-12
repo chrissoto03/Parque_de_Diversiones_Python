@@ -10,6 +10,8 @@ import time
 # =====================================================
 
 class Nodo:
+    # Un nodo guarda un dato y el enlace al siguiente. Cola y pila comparten
+    # esta pieza, pero conectan y retiran sus nodos en posiciones diferentes.
     def __init__(self, dato):
         self.dato = dato
         self.siguiente = None
@@ -30,6 +32,8 @@ class ColaVisitantes:
         return self.frente is None
 
     def encolar(self, visitante):
+        # FIFO: insertar al final conserva el orden de llegada. Si estaba
+        # vacía, el nuevo nodo es simultáneamente el frente y el final.
         nuevo = Nodo(visitante)
 
         if self.esta_vacia():
@@ -42,6 +46,8 @@ class ColaVisitantes:
         self.cantidad += 1
 
     def desencolar(self):
+        # Retiramos el frente y avanzamos su referencia al siguiente nodo.
+        # Cuando sale el último visitante también debemos limpiar el final.
         if self.esta_vacia():
             return None
 
@@ -55,6 +61,8 @@ class ColaVisitantes:
         return visitante
 
     def obtener_visitantes(self):
+        # Recorremos enlaces sin retirar visitantes; la lista resultante solo
+        # sirve para mostrar la fila en pantalla, no implementa la cola.
         resultado = []
         actual = self.frente
 
@@ -79,12 +87,14 @@ class PilaReclamos:
         return self.tope is None
 
     def apilar(self, reclamo):
+        # LIFO: el nuevo nodo apunta al antiguo tope y se convierte en el tope.
         nuevo = Nodo(reclamo)
         nuevo.siguiente = self.tope
         self.tope = nuevo
         self.cantidad += 1
 
     def desapilar(self):
+        # Deshacer consiste en retirar el tope: siempre es el último agregado.
         if self.esta_vacia():
             return None
 
@@ -95,6 +105,8 @@ class PilaReclamos:
         return reclamo
 
     def obtener_reclamos(self):
+        # Consultamos desde el más reciente hasta el más antiguo sin modificar
+        # la pila; así mostrar el historial no equivale a deshacer reclamos.
         resultado = []
         actual = self.tope
 
@@ -161,6 +173,9 @@ class ParqueDiversiones:
     # =================================================
 
     def crear_interfaz(self):
+        # Los Frame agrupan controles, los Label muestran texto y los Button
+        # ejecutan el método indicado en command al hacer clic. El Notebook
+        # separa visitantes, reclamos, fuegos y atracciones en pestañas.
 
         encabezado = tk.Frame(
             self.ventana,
@@ -454,6 +469,8 @@ class ParqueDiversiones:
         self.iniciar_atraccion("Montaña rusa")
 
     def actualizar_visitantes(self):
+        # Refresca la representación visual después de modificar la cola.
+        # Los datos reales permanecen en los nodos, no en el Listbox.
 
         self.lista_visitantes.delete(0, tk.END)
 
@@ -618,6 +635,8 @@ class ParqueDiversiones:
         )
 
     def actualizar_reclamos(self):
+        # Reconstruye el historial visible y muestra cuántos reclamos siguen
+        # vigentes, descontando los que el usuario haya deshecho.
 
         self.lista_reclamos.delete(0, tk.END)
 
@@ -692,6 +711,8 @@ class ParqueDiversiones:
 
     def lanzar_fuegos(self):
         """Construye el árbol recursivo y luego reproduce sus nacimientos."""
+        # Reiniciar elimina tanto el temporizador anterior como sus dibujos
+        # y partículas, para que dos espectáculos no se superpongan.
         if self.fuegos_id is not None:
             self.ventana.after_cancel(self.fuegos_id)
             self.fuegos_id = None
@@ -710,6 +731,8 @@ class ParqueDiversiones:
                                          fill="#111b30", outline="")
         colores = ["#FF6699", "#FFD166", "#66E9FF", "#C69BFF", "#8DFFBC"]
         for i in range(7):
+            # Cada cohete despega 0,85 segundos después del anterior.
+            # inicio y nacimiento son segundos relativos al comienzo del show.
             x = ancho * (.23 + .54 * random.random())
             y = alto * (.23 + .19 * random.random())
             inicio = i * .85
@@ -722,6 +745,9 @@ class ParqueDiversiones:
             escala = min(ancho * .10, alto * .18)
             giro = random.uniform(0, math.tau)
             for rayo in range(12):
+                # El círculo tiene 2*pi radianes (math.tau). Lo dividimos en
+                # 12 direcciones. Este for inicia 12 árboles independientes;
+                # la recursión ocurre DENTRO de dibujar_explosion.
                 self.dibujar_explosion(origen_x, y, escala,
                                       giro+rayo*math.tau/12, 3,
                                       colores[i % len(colores)], inicio+1.1)
@@ -730,6 +756,9 @@ class ParqueDiversiones:
 
     def crear_particula(self, x, y, vx, vy, nacimiento, vida, color,
                         radio, gravedad=48):
+        # x/y: origen; vx/vy: velocidad en píxeles por segundo; vida: segundos
+        # visibles; nacimiento: momento de aparición; radio: tamaño del núcleo.
+        # objetos=None significa que todavía no se crearon las figuras.
         # Cada partícula reutiliza tres objetos del Canvas: halo, estela y núcleo.
         # No usamos un after por rama: así el trabajo pendiente queda acotado.
         self.particulas.append(dict(x=x, y=y, vx=vx, vy=vy,
@@ -740,10 +769,18 @@ class ParqueDiversiones:
     def dibujar_explosion(self, x, y, longitud, angulo, nivel, color,
                          nacimiento=0):
         """Recursión real: una chispa produce dos hijas más pequeñas."""
+        # Esta función prepara los datos: no espera ni dibuja toda la explosión
+        # de inmediato. animar_fuegos mostrará cada chispa cuando le corresponda.
+        # longitud controla la distancia de la rama; angulo su dirección en
+        # radianes; nivel limita cuántas generaciones quedan por generar.
         # CASO BASE: sin tamaño o profundidad suficiente no creamos más hijas.
+        # return termina ESTA llamada y vuelve a la que la invocó. No detiene
+        # las otras ramas ni borra las partículas que ya se habían creado.
         if nivel <= 0 or longitud < 4:
             return
         duracion = .48
+        # PASO 1: registrar la chispa madre. Seno y coseno convierten la
+        # dirección angular en velocidades horizontal y vertical.
         vx = longitud * math.cos(angulo) / duracion
         vy = longitud * math.sin(angulo) / duracion
         self.crear_particula(x, y, vx, vy, nacimiento, .85, color, nivel*.75)
@@ -751,10 +788,20 @@ class ParqueDiversiones:
         # incluida la caída por gravedad: no aparecen separadas de su estela.
         nuevo_x = x + vx * duracion
         nuevo_y = y + vy * duracion + .5 * 48 * duracion**2
+        # PASO 2 (RECURSIVO): la misma función se llama con un problema menor.
+        # La primera hija se desvía -0,48 radianes y la segunda +0,48.
+        # Ambas recorren el 55 % de la longitud y reciben un nivel menos.
+        # Reducir nivel garantiza llegar al caso base y evita recursión infinita.
+        # nacimiento+duracion programa su aparición 0,48 segundos más tarde;
+        # no es una pausa: el árbol completo se calcula antes de animarlo.
         self.dibujar_explosion(nuevo_x, nuevo_y, longitud*.55,
                                angulo-.48, nivel-1, color, nacimiento+duracion)
         self.dibujar_explosion(nuevo_x, nuevo_y, longitud*.55,
                                angulo+.48, nivel-1, color, nacimiento+duracion)
+        # Ejemplo con nivel=3 y longitud suficiente: 1 madre -> 2 hijas ->
+        # 4 nietas = 7 partículas. Las llamadas con nivel=0 regresan sin crear
+        # partículas. Python termina la primera rama antes de visitar la otra;
+        # sus tiempos de nacimiento permiten mostrarlas juntas en pantalla.
 
     @staticmethod
     def color_atenuado(color, intensidad, fondo="#080D1B"):
@@ -766,11 +813,15 @@ class ParqueDiversiones:
         return "#" + "".join(f"{c:02x}" for c in canales)
 
     def animar_fuegos(self):
+        # Este bucle reproduce el árbol ya construido; no es la recursividad
+        # del ejercicio. La recursión está en las dos llamadas del método anterior.
         self.fuegos_id = None
         tiempo = time.perf_counter() - self.inicio_fuegos
         pendientes = []
         for p in self.particulas:
             edad = tiempo - p["nacimiento"]
+            # Una edad negativa indica que todavía no nace. Si supera su vida,
+            # borramos sus figuras y dejamos de conservarla en pendientes.
             if edad >= p["vida"]:
                 if p["objetos"]:
                     for objeto in p["objetos"]:
@@ -785,9 +836,12 @@ class ParqueDiversiones:
                     self.lienzo.create_line(0, 0, 0, 0, width=2, capstyle=tk.ROUND),
                     self.lienzo.create_oval(0, 0, 0, 0, outline=""))
             brillo = (1-edad/p["vida"])**.65
+            # Movimiento con gravedad: Canvas aumenta Y hacia abajo, por eso
+            # la gravedad positiva hace caer las chispas. El brillo disminuye.
             x = p["x"] + p["vx"]*edad
             y = p["y"] + p["vy"]*edad + .5*p["gravedad"]*edad**2
             anterior = max(0, edad-.12)
+            # La estela une la posición de hace 0,12 segundos con la actual.
             tx = p["x"] + p["vx"]*anterior
             ty = p["y"] + p["vy"]*anterior + .5*p["gravedad"]*anterior**2
             halo, estela, nucleo = p["objetos"]
@@ -800,6 +854,9 @@ class ParqueDiversiones:
             self.lienzo.itemconfig(nucleo, fill=self.color_atenuado(p["color"], brillo))
         self.particulas = pendientes
         if pendientes:
+            # after devuelve el control a Tkinter y solicita otro cuadro.
+            # No es una llamada recursiva directa: Tkinter lo ejecutará después,
+            # cuando esta ejecución ya haya terminado, sin apilar llamadas.
             self.fuegos_id = self.ventana.after(33, self.animar_fuegos)
         else:
             self.lienzo.create_text(self.lienzo.winfo_width()/2,
@@ -923,6 +980,8 @@ class ParqueDiversiones:
     # =================================================
 
     def contar_tiempo(self):
+        # El contador se actualiza una vez por segundo, independientemente
+        # de los cuadros de animación. Al llegar a cero cambia de atracción.
 
         self.lbl_tiempo.config(
             text="Tiempo restante: " +
@@ -1050,6 +1109,9 @@ class ParqueDiversiones:
     # =================================================
 
     def animar_atraccion(self):
+        # Cada cuadro limpia la escena de atracciones y la dibuja de nuevo.
+        # fase representa el avance del movimiento y se calcula con un reloj
+        # monotónico, que no depende de ajustes en la hora del sistema.
 
         if self.visitante_actual is None:
             return
@@ -1102,6 +1164,8 @@ class ParqueDiversiones:
         """Transforma coordenadas locales para inclinar cabina y pasajeros juntos."""
         c = self.canvas_juegos
         def punto(px, py):
+            # Rotación 2D: (x*cos(a)-y*sin(a), x*sin(a)+y*cos(a)). Luego
+            # escalamos y trasladamos al centro del vagón dentro del Canvas.
             return (x+escala*(px*math.cos(angulo)-py*math.sin(angulo)),
                     y+escala*(px*math.sin(angulo)+py*math.cos(angulo)))
         vertices = [punto(px, py) for px, py in [(-24,-23),(24,-23),(21,-5),(-21,-5)]]
@@ -1189,6 +1253,8 @@ class ParqueDiversiones:
 
 
     def cerrar_programa(self):
+        # Cancelar los tres temporizadores antes de destruir la ventana evita
+        # que un callback intente dibujar sobre controles que ya no existen.
 
         if self.fuegos_id is not None:
             self.ventana.after_cancel(self.fuegos_id)
